@@ -1,7 +1,7 @@
 use crate::{
     pieces::{Board, Piece, PieceClass},
     settings::BOARD_WIDTH,
-    utils::{pos_notation, CastlingState, SquareType, Vect},
+    utils::{pos_notation, CastlingPossibilities, SquareType, Vect},
 };
 
 const ROOK_VECTORS: [Vect; 4] = [
@@ -32,9 +32,10 @@ const KNIGHT_VECTORS: [Vect; 8] = [
 pub enum MoveType {
     Standard(Vect, Vect),
     DoubleAdvance(Vect, Vect),
-    EnPassant(Vect, Vect),
-    Castling(bool), // True if queenside
+    EnPassant(Vect, Vect, Vect), // Last vect is en_passant_target
+    Castling(bool),              // True if queenside
     Promotion(Vect, Vect, Piece),
+    Null,
 }
 
 pub struct Move {
@@ -51,11 +52,12 @@ impl Move {
         let mov = match &self.move_type {
             MoveType::Standard(from, to) => standard_move_notation(from, to),
             MoveType::DoubleAdvance(from, to) => standard_move_notation(from, to),
-            MoveType::EnPassant(from, to) => standard_move_notation(from, to),
+            MoveType::EnPassant(from, to, _) => standard_move_notation(from, to),
             MoveType::Castling(queenside) => String::from(if *queenside { "0-0-0" } else { "0-0" }),
             MoveType::Promotion(from, to, piece) => {
                 format!("{} ({})", standard_move_notation(from, to), piece.repr())
             }
+            MoveType::Null => String::from("NULL"),
         };
         format!(
             "'{}: {}'",
@@ -156,7 +158,7 @@ fn pawn_moves(
     board: &Board,
     pos: Vect,
     find_defended: bool,
-    en_passant_target: &Vect,
+    en_passant_midpoint: &Vect,
 ) -> (Vec<Move>, Vec<Vect>) {
     let mut moves = Vec::new();
     let mut defended = Vec::new();
@@ -192,10 +194,14 @@ fn pawn_moves(
         }
         if state == SquareType::Enemy {
             moves.push(promotion_or_standard(piece, pos.clone(), diagonal_pos));
-        } else if state != SquareType::Own && diagonal_pos.equals(en_passant_target) {
+        } else if state != SquareType::Own && diagonal_pos.equals(en_passant_midpoint) {
+            let en_passant_target = Vect {
+                x: pos.x + x,
+                y: pos.y,
+            };
             moves.push(Move {
                 enemy: piece.enemy,
-                move_type: MoveType::EnPassant(pos.clone(), diagonal_pos),
+                move_type: MoveType::EnPassant(pos.clone(), diagonal_pos, en_passant_target),
             });
         }
     }
@@ -268,8 +274,41 @@ fn rook_moves(
     board: &Board,
     pos: Vect,
     find_defended: bool,
+    castling_state: CastlingPossibilities,
 ) -> (Vec<Move>, Vec<Vect>) {
-    let (moves, defended) = piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
+    let (mut moves, defended) = piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
+
+    // Castling
+    if BOARD_WIDTH != 8 {
+        return (moves, defended);
+    }
+
+    // True: Queenside, False: Kingside
+    let side = pos.x == 0;
+    let move_vect = Vect {
+        x: if side { 1 } else { -1 },
+        y: 0,
+    };
+    let mut square = pos.clone();
+    loop {
+        square.add(&move_vect);
+        let cell = &board[square.y as usize][square.x as usize];
+        match cell {
+            Some(king) => match piece.class {
+                PieceClass::King => {
+                    if king.enemy == piece.enemy {
+                        moves.push(Move {
+                            enemy: piece.enemy,
+                            move_type: MoveType::Castling(side),
+                        });
+                    }
+                }
+                _ => break,
+            },
+            None => (),
+        }
+    }
+
     (moves, defended)
 }
 
@@ -292,7 +331,6 @@ fn king_moves(
     board: &Board,
     pos: Vect,
     find_defended: bool,
-    castling_state: CastlingState,
 ) -> (Vec<Move>, Vec<Vect>) {
     let mut moves = Vec::new();
     let mut defended = Vec::new();
@@ -320,42 +358,6 @@ fn king_moves(
                     enemy: piece.enemy,
                     move_type: MoveType::Standard(pos.clone(), square),
                 });
-            }
-        }
-    }
-
-    // Castling
-    // True: Queenside, False: Kingside
-    let mut castling_sides = Vec::new();
-
-    if castling_state.queenside {
-        castling_sides.push(true);
-    }
-    if castling_state.kingside {
-        castling_sides.push(false);
-    }
-    for side in castling_sides {
-        let move_vect = Vect {
-            x: if side { -1 } else { 1 },
-            y: 0,
-        };
-        let mut square = pos.clone();
-        loop {
-            square.add(&move_vect);
-            let cell = &board[square.y as usize][square.x as usize];
-            match cell {
-                Some(rook) => match piece.class {
-                    PieceClass::Rook => {
-                        if rook.enemy == piece.enemy {
-                            moves.push(Move {
-                                enemy: piece.enemy,
-                                move_type: MoveType::Castling(side),
-                            });
-                        }
-                    }
-                    _ => break,
-                },
-                None => (),
             }
         }
     }

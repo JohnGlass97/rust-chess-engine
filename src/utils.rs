@@ -1,6 +1,6 @@
-use crate::settings::{BOARD_WIDTH, REVERSE_ORIGIN};
+use crate::settings::{BOARD_WIDTH, ENGINE_BLACK};
 
-const LETTERS: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+pub const LETTERS: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
 // Also represents vectors
 #[derive(Copy, Clone)]
@@ -27,15 +27,16 @@ pub enum SquareType {
     Invalid,
 }
 
-pub struct CastlingState {
+#[derive(Copy, Clone)]
+pub struct CastlingPossibilities {
     pub queenside: bool,
     pub kingside: bool,
 }
 
 pub fn pos_notation(pos: &Vect) -> String {
     let (mut x, mut y) = (pos.x, pos.y);
-    if REVERSE_ORIGIN {
-        x = BOARD_WIDTH - x - 1;
+    if ENGINE_BLACK {
+        // x = BOARD_WIDTH - x - 1;
         y = BOARD_WIDTH - y - 1;
     }
     let x_usize = x as usize;

@@ -2,6 +2,7 @@ use crate::{settings::BOARD_WIDTH, utils::Vect};
 
 pub type Board = [[Option<Piece>; BOARD_WIDTH as usize]; BOARD_WIDTH as usize];
 
+#[derive(Copy, Clone)]
 pub enum PieceClass {
     Pawn,
     Bishop,
@@ -11,6 +12,7 @@ pub enum PieceClass {
     King,
 }
 
+#[derive(Copy, Clone)]
 pub struct Piece {
     pub class: PieceClass,
     pub enemy: bool,
