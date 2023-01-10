@@ -48,7 +48,7 @@ fn standard_move_notation(from: &Vect, to: &Vect) -> String {
 }
 
 impl Move {
-    fn repr(&self) -> String {
+    pub fn repr(&self) -> String {
         let mov = match &self.move_type {
             MoveType::Standard(from, to) => standard_move_notation(from, to),
             MoveType::DoubleAdvance(from, to) => standard_move_notation(from, to),
@@ -153,32 +153,35 @@ fn promotion_or_standard(piece: &Piece, from: Vect, to: Vect) -> Move {
     }
 }
 
-fn pawn_moves(
+pub fn pawn_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
     find_defended: bool,
-    en_passant_midpoint: &Vect,
+    en_passant_midpoint: &Option<Vect>,
 ) -> (Vec<Move>, Vec<Vect>) {
     let mut moves = Vec::new();
     let mut defended = Vec::new();
 
-    // One forward
     let move_direction = if piece.enemy { -1 } else { 1 };
-    let forwards_pos = Vect {
-        x: pos.x,
-        y: pos.y + move_direction,
-    };
 
+    // One forward
+    let mut one_forward = false;
     {
+        let forwards_pos = Vect {
+            x: pos.x,
+            y: pos.y + move_direction,
+        };
         let state = check_squre(board, &forwards_pos);
         if state == SquareType::Free {
             moves.push(promotion_or_standard(piece, pos.clone(), forwards_pos));
+            one_forward = false;
         } else if state == SquareType::Invalid {
             println!("UNPROMOTED PAWN!");
             return (moves, defended);
         }
     }
+
     // Diagonal attack and en passant
     for x in [-1, 1] {
         let diagonal_pos = Vect {
@@ -194,20 +197,31 @@ fn pawn_moves(
         }
         if state == SquareType::Enemy {
             moves.push(promotion_or_standard(piece, pos.clone(), diagonal_pos));
-        } else if state != SquareType::Own && diagonal_pos.equals(en_passant_midpoint) {
-            let en_passant_target = Vect {
-                x: pos.x + x,
-                y: pos.y,
-            };
-            moves.push(Move {
-                enemy: piece.enemy,
-                move_type: MoveType::EnPassant(pos.clone(), diagonal_pos, en_passant_target),
-            });
+        } else if state != SquareType::Own {
+            match en_passant_midpoint {
+                Some(midpoint) => {
+                    if diagonal_pos.equals(midpoint) {
+                        let en_passant_target = Vect {
+                            x: pos.x + x,
+                            y: pos.y,
+                        };
+                        moves.push(Move {
+                            enemy: piece.enemy,
+                            move_type: MoveType::EnPassant(
+                                pos.clone(),
+                                diagonal_pos,
+                                en_passant_target,
+                            ),
+                        });
+                    }
+                }
+                None => (),
+            }
         }
     }
 
     // Double advance
-    if pos.y == 1 || pos.y == BOARD_WIDTH - 2 {
+    if (pos.y == 1 || pos.y == BOARD_WIDTH - 2) && one_forward {
         let forwards_pos = Vect {
             x: pos.x,
             y: pos.y + 2 * move_direction,
@@ -224,7 +238,7 @@ fn pawn_moves(
     (moves, defended)
 }
 
-fn knight_moves(
+pub fn knight_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
@@ -259,7 +273,7 @@ fn knight_moves(
     (moves, defended)
 }
 
-fn bishop_moves(
+pub fn bishop_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
@@ -269,12 +283,12 @@ fn bishop_moves(
     (moves, defended)
 }
 
-fn rook_moves(
+pub fn rook_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
     find_defended: bool,
-    castling_state: CastlingPossibilities,
+    castling: &CastlingPossibilities,
 ) -> (Vec<Move>, Vec<Vect>) {
     let (mut moves, defended) = piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
 
@@ -284,22 +298,33 @@ fn rook_moves(
     }
 
     // True: Queenside, False: Kingside
-    let side = pos.x == 0;
+    let queenside = pos.x == 0;
+
+    // Only proceed if castling is possible
+    if !castling.kingside && !queenside || !castling.queenside && queenside {
+        return (moves, defended);
+    }
+
     let move_vect = Vect {
-        x: if side { 1 } else { -1 },
+        x: if queenside { 1 } else { -1 },
         y: 0,
     };
     let mut square = pos.clone();
     loop {
+        // Check path to king is clear and that king is reached
         square.add(&move_vect);
+        if check_squre(&board, &square) == SquareType::Invalid {
+            // TODO: This shouldn't be reached if rook is present
+            break;
+        }
         let cell = &board[square.y as usize][square.x as usize];
         match cell {
-            Some(king) => match piece.class {
+            Some(king) => match king.class {
                 PieceClass::King => {
                     if king.enemy == piece.enemy {
                         moves.push(Move {
                             enemy: piece.enemy,
-                            move_type: MoveType::Castling(side),
+                            move_type: MoveType::Castling(queenside),
                         });
                     }
                 }
@@ -312,7 +337,7 @@ fn rook_moves(
     (moves, defended)
 }
 
-fn queen_moves(
+pub fn queen_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
@@ -320,13 +345,14 @@ fn queen_moves(
 ) -> (Vec<Move>, Vec<Vect>) {
     let (mut moves, mut defended) =
         piece.get_linear_moves(board, pos, BISHOP_VECTORS, find_defended);
-    let (moves_2, defended_2) = piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
-    moves.extend(moves_2);
-    defended.extend(defended_2);
+    let (mut moves_2, mut defended_2) =
+        piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
+    moves.append(&mut moves_2);
+    defended.append(&mut defended_2);
     (moves, defended)
 }
 
-fn king_moves(
+pub fn king_moves(
     piece: &Piece,
     board: &Board,
     pos: Vect,
@@ -341,7 +367,7 @@ fn king_moves(
         SquareType::Own
     };
 
-    // Move 1
+    // Move radius 1
     for vect_set in [BISHOP_VECTORS, ROOK_VECTORS] {
         for move_vect in vect_set {
             let mut square = pos.clone();

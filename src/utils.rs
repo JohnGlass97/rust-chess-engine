@@ -1,4 +1,7 @@
-use crate::settings::{BOARD_WIDTH, ENGINE_BLACK};
+use crate::{
+    moves::Move,
+    settings::{BOARD_WIDTH, ENGINE_BLACK},
+};
 
 pub const LETTERS: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 
@@ -12,7 +15,7 @@ pub struct Vect {
 impl Vect {
     pub fn add(&mut self, other: &Vect) {
         self.x += other.x;
-        self.y == other.y;
+        self.y += other.y;
     }
     pub fn equals(&self, other: &Vect) -> bool {
         self.x == other.x && self.y == other.y
@@ -33,8 +36,17 @@ pub struct CastlingPossibilities {
     pub kingside: bool,
 }
 
+pub struct AnalysisResult {
+    pub best_moves: Vec<Move>,
+    pub score: i16,
+    pub opponent_in_check: bool,
+    pub engine_no_moves: bool,
+    pub sim_moves: u32,
+    pub tested_moves: u32,
+}
+
 pub fn pos_notation(pos: &Vect) -> String {
-    let (mut x, mut y) = (pos.x, pos.y);
+    let (x, mut y) = (pos.x, pos.y);
     if ENGINE_BLACK {
         // x = BOARD_WIDTH - x - 1;
         y = BOARD_WIDTH - y - 1;
