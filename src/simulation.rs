@@ -138,6 +138,25 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
         }
     }
 
+    if root {
+        // Prioritise capturing pieces now rather than later
+        // Otherwise, engine might never take piece
+        let mut prioritised_moves = Vec::new();
+        let mut immediate_score = i16::MIN;
+        for mov in best_moves {
+            let score = game_state.perform_move(&mov).score;
+            if score < immediate_score {
+                continue;
+            }
+            if score > immediate_score {
+                prioritised_moves.clear();
+                immediate_score = score;
+            }
+            prioritised_moves.push(mov);
+        }
+        best_moves = prioritised_moves;
+    }
+
     let engine_no_moves = best_moves.len() == 0;
 
     AnalysisResult {
