@@ -9,7 +9,7 @@ pub const ENGINE_BLACK: bool = false;
 // Dev mode disables castling
 pub const DEV_MODE: bool = true;
 
-pub const THREADING: bool = false;
+pub const THREADING: bool = true;
 
 // Layout for dev mode
 // King must be on right, layout loaded

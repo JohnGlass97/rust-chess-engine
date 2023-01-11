@@ -9,6 +9,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
         return AnalysisResult {
             best_moves: Vec::new(),
             score: game_state.score,
+            immediate_score: game_state.score,
             opponent_in_check: false,
             engine_no_moves: false,
             sim_moves: 0,
@@ -27,6 +28,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
 
     let mut best_moves: Vec<Move> = Vec::new();
     let mut best_score = i16::MIN;
+    let mut best_immediate_score = i16::MIN;
 
     for engine_move in engine_possible_moves {
         let mut self_check = false;
@@ -39,6 +41,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             return AnalysisResult {
                 best_moves: Vec::from([engine_move]),
                 score: game_state_1.score,
+                immediate_score: game_state_1.score,
                 opponent_in_check: true,
                 engine_no_moves: false,
                 sim_moves,
@@ -64,19 +67,23 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
                 break;
             }
 
+            let immediate_score = game_state_2.score;
+
+            let func = move || -> AnalysisResult { analyse(&game_state_2, depth - 1, false) };
+
             if THREADING && root {
-                let handle = thread::spawn(move || -> AnalysisResult {
-                    analyse(&game_state_2, depth - 1, false)
-                });
+                let handle = thread::spawn(func);
                 result_handles.push(handle);
             } else {
-                results.push(analyse(&game_state_2, depth - 1, false));
+                results.push(func());
             }
         }
 
         for handle in result_handles {
             results.push(handle.join().unwrap());
         }
+
+        let mut worst_immediate_score = i16::MAX;
 
         for analysis in results {
             sim_moves += analysis.sim_moves;
@@ -94,7 +101,10 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
                 break;
             }
 
-            worst_case_score = i16::min(analysis.score, worst_case_score);
+            if analysis.score < worst_case_score {
+                worst_case_score = analysis.score;
+                worst_immediate_score = i16::min(analysis.immediate_score, worst_immediate_score);
+            }
         }
 
         if self_check {
@@ -108,6 +118,8 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             let analysis = analyse(&game_state_1, 1, false);
             sim_moves += analysis.sim_moves;
 
+            worst_immediate_score = game_state_1.score;
+
             // If checkmate push with actual score, else -1000
             worst_case_score = if analysis.opponent_in_check {
                 analysis.score
@@ -116,14 +128,22 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             };
         }
 
-        if worst_case_score < best_score {
+        // Prioritising recurisve score followed by immediate score
+        if worst_case_score < best_score || worst_immediate_score < best_immediate_score {
             continue;
         }
         if worst_case_score > best_score {
             best_moves.clear();
-            best_score = worst_case_score
+            best_score = worst_case_score;
+            best_immediate_score = worst_immediate_score;
         }
-        best_moves.push(engine_move);
+        if worst_immediate_score > best_immediate_score {
+            best_moves.clear();
+            best_immediate_score = worst_immediate_score;
+        }
+        if root {
+            best_moves.push(engine_move);
+        }
 
         completed_outer += 1;
         if root {
@@ -138,7 +158,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
         }
     }
 
-    if root {
+    /*if root {
         // Prioritise capturing pieces now rather than later
         // Otherwise, engine might never take piece
         let mut prioritised_moves = Vec::new();
@@ -155,13 +175,14 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             prioritised_moves.push(mov);
         }
         best_moves = prioritised_moves;
-    }
+    }*/
 
-    let engine_no_moves = best_moves.len() == 0;
+    let engine_no_moves = valid_moves == 0;
 
     AnalysisResult {
         best_moves,
         score: best_score,
+        immediate_score: game_state.score,
         opponent_in_check: false,
         engine_no_moves,
         sim_moves,

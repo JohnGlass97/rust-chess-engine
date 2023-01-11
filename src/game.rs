@@ -27,7 +27,7 @@ pub fn find_best_move(game_state: &GameState, recurision_depth: i8) -> Option<Mo
     game_state.perform_move(&best_move).print();
 
     println!(
-        "{} selected from {} tested moves.",
+        "{} selected from {} valid moves.",
         best_move.repr(),
         analysis.valid_moves
     );
