@@ -12,7 +12,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             opponent_in_check: false,
             engine_no_moves: false,
             sim_moves: 0,
-            tested_moves: 0,
+            valid_moves: 0,
         };
     }
 
@@ -23,7 +23,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
     let timer = Instant::now();
 
     let mut sim_moves: u32 = 0;
-    let mut tested_moves: u32 = 0;
+    let mut valid_moves: u32 = 0;
 
     let mut best_moves: Vec<Move> = Vec::new();
     let mut best_score = i16::MIN;
@@ -42,7 +42,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
                 opponent_in_check: true,
                 engine_no_moves: false,
                 sim_moves,
-                tested_moves: 0,
+                valid_moves: 0,
             };
         }
 
@@ -101,7 +101,7 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
             continue;
         }
 
-        tested_moves += 1;
+        valid_moves += 1;
 
         // Trapped opponent
         if !found_valid_opponent_move {
@@ -146,6 +146,6 @@ pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult 
         opponent_in_check: false,
         engine_no_moves,
         sim_moves,
-        tested_moves,
+        valid_moves,
     }
 }

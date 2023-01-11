@@ -29,7 +29,7 @@ pub fn find_best_move(game_state: &GameState, recurision_depth: i8) -> Option<Mo
     println!(
         "{} selected from {} tested moves.",
         best_move.repr(),
-        analysis.tested_moves
+        analysis.valid_moves
     );
     println!(
         "Simulatesd {} moves, took {} seconds or {} ms",

@@ -17,5 +17,5 @@ use utils::AnalysisResult;
 
 fn main() {
     let game_state = parse_layout();
-    find_best_move(&game_state, 4);
+    find_best_move(&game_state, 3);
 }

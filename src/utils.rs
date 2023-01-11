@@ -42,7 +42,7 @@ pub struct AnalysisResult {
     pub opponent_in_check: bool,
     pub engine_no_moves: bool,
     pub sim_moves: u32,
-    pub tested_moves: u32,
+    pub valid_moves: u32,
 }
 
 pub fn pos_notation(pos: &Vect) -> String {
