@@ -12,10 +12,11 @@ use std::time::Instant;
 
 use game::find_best_move;
 use gamestate::parse_layout;
+use settings::DEPTH;
 use simulation::analyse;
 use utils::AnalysisResult;
 
 fn main() {
     let game_state = parse_layout();
-    find_best_move(&game_state, 3);
+    find_best_move(&game_state, DEPTH);
 }

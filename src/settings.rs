@@ -11,14 +11,16 @@ pub const DEV_MODE: bool = true;
 
 pub const THREADING: bool = true;
 
+pub const DEPTH: i8 = 3;
+
 // Layout for dev mode
 // King must be on right, layout loaded
 // flipped vertically only before loading
 // into board
-pub const LAYOUT: &str = "
+pub const LAYOUT: &str = r"
 . . . . K . . .
-. r . . . . . .
 . . . . . . . .
+. r . . . . . .
 . . . . . . . .
 r . . . . . . .
 . . . . . . . .

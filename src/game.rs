@@ -14,14 +14,19 @@ pub fn find_best_move(game_state: &GameState, recurision_depth: i8) -> Option<Mo
     let timer = Instant::now();
     let analysis = analyse(&game_state, recurision_depth, true);
 
-    if analysis.score > 250 {
+    let mut moves = analysis.best_moves.unwrap();
+
+    for mov in moves.iter() {
+        println!("{}", mov.repr());
+    }
+
+    if analysis.score_buffer[0] > 250 {
         println!("Checkmate found!");
     } else if analysis.engine_no_moves {
         println!("No moves found, game over?");
         return None;
     }
 
-    let mut moves = analysis.best_moves;
     let best_move = find_best_development(game_state, moves);
 
     game_state.perform_move(&best_move).print();
