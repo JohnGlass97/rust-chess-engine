@@ -15,9 +15,9 @@ pub const THREADING: bool = true;
 // King must be on right, layout loaded
 // flipped vertically only before loading
 // into board
-pub const LAYOUT: &str = r"
-. . . . K . . .
+pub const LAYOUT: &str = "
 . . . . . . . .
+. . . . K . . .
 . r . . . . . .
 . . . . . . . .
 r . . . . . . .
