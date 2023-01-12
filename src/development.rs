@@ -21,6 +21,9 @@ fn get_move_type_data(mov: &Move) -> Option<(Vect, Vect, bool)> {
 }
 
 fn get_pawn_score(game_state: &GameState, mov: &Move) -> f32 {
+    if game_state.score > 20 {
+        return 0.
+    }
     let from = match get_move_type_data(mov) {
         Some((f, _, _)) => f,
         None => return 0.,

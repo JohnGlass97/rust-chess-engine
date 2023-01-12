@@ -169,6 +169,12 @@ pub fn pawn_moves(
 
     let move_direction = if piece.enemy { -1 } else { 1 };
 
+    let square_type = if piece.enemy {
+        SquareType::Enemy
+    } else {
+        SquareType::Own
+    };
+
     // One forward
     let mut one_forward = false;
     {
@@ -204,36 +210,39 @@ pub fn pawn_moves(
         if find_defended {
             defended.push(diagonal_pos);
         }
-        if state == SquareType::Enemy {
+        if state == SquareType::Free {
+            if diagonal_pos.y == if piece.enemy { 2 } else { BOARD_WIDTH - 3 } {
+                match en_passant_midpoint {
+                    Some(midpoint) => {
+                        if diagonal_pos.equals(midpoint) {
+                            let en_passant_target = Vect {
+                                x: pos.x + x,
+                                y: pos.y,
+                            };
+                            moves.push(Move {
+                                enemy: piece.enemy,
+                                move_type: MoveType::EnPassant(
+                                    pos.clone(),
+                                    diagonal_pos,
+                                    en_passant_target,
+                                ),
+                            });
+                        }
+                    }
+                    None => (),
+                }
+            }
+            continue;
+        }
+        if state != square_type {
             moves.push(promotion_or_standard(
                 piece,
                 pos.clone(),
                 diagonal_pos,
                 true,
             ));
-        } else if state != SquareType::Own
-            && diagonal_pos.y == if piece.enemy { 2 } else { BOARD_WIDTH - 3 }
-        {
-            match en_passant_midpoint {
-                Some(midpoint) => {
-                    if diagonal_pos.equals(midpoint) {
-                        let en_passant_target = Vect {
-                            x: pos.x + x,
-                            y: pos.y,
-                        };
-                        moves.push(Move {
-                            enemy: piece.enemy,
-                            move_type: MoveType::EnPassant(
-                                pos.clone(),
-                                diagonal_pos,
-                                en_passant_target,
-                            ),
-                        });
-                    }
-                }
-                None => (),
-            }
         }
+            
     }
 
     // Double advance

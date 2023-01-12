@@ -43,7 +43,7 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
         if !game_state_1.kings_alive {
             return AnalysisResult {
                 best_moves: Some(Vec::from([engine_move])),
-                score_buffer: Vec::from([game_state.score]),
+                score_buffer: Vec::from([game_state_1.score]),
                 opponent_in_check: true,
                 engine_no_moves: false,
                 sim_moves,

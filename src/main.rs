@@ -36,6 +36,8 @@ fn find_best_move(game_state: &GameState, recurision_depth: u8) -> Option<Move> 
     } else if analysis.engine_no_moves {
         println!("No moves found, game over?");
         return None;
+    } else {
+        println!("Best score: {}", analysis.score_buffer[0]);
     }
 
     println!("Analysis found {} moves", moves.len());
@@ -50,7 +52,7 @@ fn find_best_move(game_state: &GameState, recurision_depth: u8) -> Option<Move> 
         analysis.valid_moves
     );
     println!(
-        "Simulatesd {} moves, took {} seconds or {} ms",
+        "Simulated {} moves, took {} seconds or {} ms",
         analysis.sim_moves,
         timer.elapsed().as_secs(),
         timer.elapsed().as_millis()
@@ -84,7 +86,7 @@ fn main() {
     }
 
     loop {
-        let opponent_move = input_move("enemy", &game_state, true);
+        let opponent_move = input_move("opponent", &game_state, true);
         game_state = game_state.perform_move(&opponent_move);
 
         let depth = get_recursion_depth();
@@ -100,5 +102,8 @@ fn main() {
             None => input_move("engine", &game_state, false),
         };
         game_state = game_state.perform_move(&engine_move);
+        for mov in game_state.get_possible_moves(true) {
+            println!("{}", mov.repr());
+        }
     }
 }
