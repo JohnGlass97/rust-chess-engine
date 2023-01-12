@@ -7,8 +7,8 @@ use crate::{
     utils::{get_better_buffer, AnalysisResult, BetterBuffer},
 };
 
-pub fn analyse(game_state: &GameState, depth: i8, root: bool) -> AnalysisResult {
-    assert!(game_state.kings_alive && depth >= 0);
+pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult {
+    assert!(game_state.kings_alive);
 
     if depth == 0 {
         return AnalysisResult {

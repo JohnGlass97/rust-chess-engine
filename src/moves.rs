@@ -1,40 +1,16 @@
 use crate::{
+    gamestate::GameState,
     pieces::{Board, Piece, PieceClass},
     settings::BOARD_WIDTH,
-    utils::{pos_notation, CastlingPossibilities, SquareType, Vect},
+    utils::{input, pos_notation, SquareType, Vect, LETTERS},
 };
 
-const ROOK_VECTORS: [Vect; 4] = [
-    Vect { x: 1, y: 0 },
-    Vect { x: 0, y: 1 },
-    Vect { x: -1, y: 0 },
-    Vect { x: 0, y: -1 },
-];
-
-const BISHOP_VECTORS: [Vect; 4] = [
-    Vect { x: 1, y: 1 },
-    Vect { x: -1, y: 1 },
-    Vect { x: -1, y: -1 },
-    Vect { x: 1, y: -1 },
-];
-
-const KNIGHT_VECTORS: [Vect; 8] = [
-    Vect { x: 2, y: 1 },
-    Vect { x: -2, y: 1 },
-    Vect { x: 2, y: -1 },
-    Vect { x: -2, y: -1 },
-    Vect { x: 1, y: 2 },
-    Vect { x: 1, y: -2 },
-    Vect { x: -1, y: 2 },
-    Vect { x: -1, y: -2 },
-];
-
 pub enum MoveType {
-    Standard(Vect, Vect),
+    Standard(Vect, Vect, bool), // True if destination is self defended
     DoubleAdvance(Vect, Vect),
-    EnPassant(Vect, Vect, Vect), // Last vect is en_passant_target
+    EnPassant(Vect, Vect, Vect), // Last vect is en_passant_target (piece to remove)
     Castling(bool),              // True if queenside
-    Promotion(Vect, Vect, Piece),
+    Promotion(Vect, Vect, Piece, bool), // True if destination is self defended
     Null,
 }
 
@@ -50,11 +26,11 @@ fn standard_move_notation(from: &Vect, to: &Vect) -> String {
 impl Move {
     pub fn repr(&self) -> String {
         let mov = match &self.move_type {
-            MoveType::Standard(from, to) => standard_move_notation(from, to),
+            MoveType::Standard(from, to, _) => standard_move_notation(from, to),
             MoveType::DoubleAdvance(from, to) => standard_move_notation(from, to),
             MoveType::EnPassant(from, to, _) => standard_move_notation(from, to),
             MoveType::Castling(queenside) => String::from(if *queenside { "0-0-0" } else { "0-0" }),
-            MoveType::Promotion(from, to, piece) => {
+            MoveType::Promotion(from, to, piece, _) => {
                 format!("{} ({})", standard_move_notation(from, to), piece.repr())
             }
             MoveType::Null => String::from("NULL"),
@@ -67,7 +43,7 @@ impl Move {
     }
 }
 
-fn check_squre(board: &Board, pos: &Vect) -> SquareType {
+pub fn check_squre(board: &Board, pos: &Vect) -> SquareType {
     let (x, y) = (pos.x, pos.y);
     if x >= BOARD_WIDTH || x < 0 {
         return SquareType::Invalid;
@@ -89,304 +65,106 @@ fn check_squre(board: &Board, pos: &Vect) -> SquareType {
     }
 }
 
-impl Piece {
-    fn get_linear_moves(
-        &self,
-        board: &Board,
-        pos: Vect,
-        vect_set: [Vect; 4],
-        find_defended: bool,
-    ) -> (Vec<Move>, Vec<Vect>) {
-        let mut moves = Vec::new();
-        let mut defended = Vec::new();
-
-        let square_type = if self.enemy {
-            SquareType::Enemy
-        } else {
-            SquareType::Own
-        };
-
-        for move_vect in vect_set {
-            let mut square = pos.clone();
-            loop {
-                square.add(&move_vect);
-                let state = check_squre(board, &square);
-                if state == SquareType::Invalid {
-                    break;
-                }
-                if find_defended {
-                    defended.push(square.clone());
-                }
-                if state == square_type {
-                    break;
-                }
-                moves.push(Move {
-                    enemy: self.enemy,
-                    move_type: MoveType::Standard(pos.clone(), square.clone()),
-                });
-                if state != SquareType::Free {
-                    break;
-                }
-            }
-        }
-        (moves, defended)
-    }
-}
-
-fn promotion_or_standard(piece: &Piece, from: Vect, to: Vect) -> Move {
-    Move {
-        enemy: piece.enemy,
-        move_type: if to.y == 0 || to.y == BOARD_WIDTH - 1 {
-            MoveType::Promotion(
-                from,
-                to,
-                Piece {
-                    // For now, the engine will only consider queening,
-                    // but underpromotion is possible if entered manually
-                    class: PieceClass::Queen,
-                    enemy: piece.enemy,
-                },
-            )
-        } else {
-            MoveType::Standard(from, to)
-        },
-    }
-}
-
-pub fn pawn_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-    en_passant_midpoint: &Option<Vect>,
-) -> (Vec<Move>, Vec<Vect>) {
-    let mut moves = Vec::new();
-    let mut defended = Vec::new();
-
-    let move_direction = if piece.enemy { -1 } else { 1 };
-
-    // One forward
-    let mut one_forward = false;
-    {
-        let forwards_pos = Vect {
-            x: pos.x,
-            y: pos.y + move_direction,
-        };
-        let state = check_squre(board, &forwards_pos);
-        if state == SquareType::Free {
-            moves.push(promotion_or_standard(piece, pos.clone(), forwards_pos));
-            one_forward = false;
-        } else if state == SquareType::Invalid {
-            println!("UNPROMOTED PAWN!");
-            return (moves, defended);
-        }
-    }
-
-    // Diagonal attack and en passant
-    for x in [-1, 1] {
-        let diagonal_pos = Vect {
-            x: pos.x + x,
-            y: pos.y + move_direction,
-        };
-        let state = check_squre(board, &diagonal_pos);
-        if state == SquareType::Invalid {
-            continue;
-        }
-        if find_defended {
-            defended.push(diagonal_pos);
-        }
-        if state == SquareType::Enemy {
-            moves.push(promotion_or_standard(piece, pos.clone(), diagonal_pos));
-        } else if state != SquareType::Own {
-            match en_passant_midpoint {
-                Some(midpoint) => {
-                    if diagonal_pos.equals(midpoint) {
-                        let en_passant_target = Vect {
-                            x: pos.x + x,
-                            y: pos.y,
-                        };
-                        moves.push(Move {
-                            enemy: piece.enemy,
-                            move_type: MoveType::EnPassant(
-                                pos.clone(),
-                                diagonal_pos,
-                                en_passant_target,
-                            ),
-                        });
-                    }
-                }
-                None => (),
-            }
-        }
-    }
-
-    // Double advance
-    if (pos.y == 1 || pos.y == BOARD_WIDTH - 2) && one_forward {
-        let forwards_pos = Vect {
-            x: pos.x,
-            y: pos.y + 2 * move_direction,
-        };
-        let state = check_squre(board, &forwards_pos);
-        if state == SquareType::Free {
-            moves.push(Move {
-                enemy: piece.enemy,
-                move_type: MoveType::DoubleAdvance(pos.clone(), forwards_pos),
-            });
-        }
-    }
-
-    (moves, defended)
-}
-
-pub fn knight_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-) -> (Vec<Move>, Vec<Vect>) {
-    let mut moves = Vec::new();
-    let mut defended = Vec::new();
-
-    let square_type = if piece.enemy {
-        SquareType::Enemy
-    } else {
-        SquareType::Own
-    };
-    for move_vect in KNIGHT_VECTORS {
-        let mut square = pos.clone();
-        square.add(&move_vect);
-        let state = check_squre(board, &square);
-        if state == SquareType::Invalid {
-            continue;
-        }
-        if find_defended {
-            defended.push(square.clone());
-        }
-        if state != square_type {
-            moves.push(Move {
-                enemy: piece.enemy,
-                move_type: MoveType::Standard(pos.clone(), square),
-            });
-        }
-    }
-
-    (moves, defended)
-}
-
-pub fn bishop_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-) -> (Vec<Move>, Vec<Vect>) {
-    let (moves, defended) = piece.get_linear_moves(board, pos, BISHOP_VECTORS, find_defended);
-    (moves, defended)
-}
-
-pub fn rook_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-    castling: &CastlingPossibilities,
-) -> (Vec<Move>, Vec<Vect>) {
-    let (mut moves, defended) = piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
-
-    // Castling
-    if BOARD_WIDTH != 8 {
-        return (moves, defended);
-    }
-
-    // True: Queenside, False: Kingside
-    let queenside = pos.x == 0;
-
-    // Only proceed if castling is possible
-    if !castling.kingside && !queenside || !castling.queenside && queenside {
-        return (moves, defended);
-    }
-
-    let move_vect = Vect {
-        x: if queenside { 1 } else { -1 },
-        y: 0,
-    };
-    let mut square = pos.clone();
+fn get_position(prompt: &str) -> Vect {
     loop {
-        // Check path to king is clear and that king is reached
-        square.add(&move_vect);
-        if check_squre(&board, &square) == SquareType::Invalid {
-            // TODO: This shouldn't be reached if rook is present
-            break;
+        let inp = input(prompt);
+        if inp.len() != 2 {
+            println!("Position must be 2 characters");
+            continue;
         }
-        let cell = &board[square.y as usize][square.x as usize];
-        match cell {
-            Some(king) => match king.class {
-                PieceClass::King => {
-                    if king.enemy == piece.enemy {
-                        moves.push(Move {
-                            enemy: piece.enemy,
-                            move_type: MoveType::Castling(queenside),
-                        });
-                    }
-                }
-                _ => break,
-            },
-            None => (),
-        }
-    }
-
-    (moves, defended)
-}
-
-pub fn queen_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-) -> (Vec<Move>, Vec<Vect>) {
-    let (mut moves, mut defended) =
-        piece.get_linear_moves(board, pos, BISHOP_VECTORS, find_defended);
-    let (mut moves_2, mut defended_2) =
-        piece.get_linear_moves(board, pos, ROOK_VECTORS, find_defended);
-    moves.append(&mut moves_2);
-    defended.append(&mut defended_2);
-    (moves, defended)
-}
-
-pub fn king_moves(
-    piece: &Piece,
-    board: &Board,
-    pos: Vect,
-    find_defended: bool,
-) -> (Vec<Move>, Vec<Vect>) {
-    let mut moves = Vec::new();
-    let mut defended = Vec::new();
-
-    let square_type = if piece.enemy {
-        SquareType::Enemy
-    } else {
-        SquareType::Own
-    };
-
-    // Move radius 1
-    for vect_set in [BISHOP_VECTORS, ROOK_VECTORS] {
-        for move_vect in vect_set {
-            let mut square = pos.clone();
-            square.add(&move_vect);
-            let state = check_squre(board, &square);
-            if state == SquareType::Invalid {
+        let chars = inp.as_bytes();
+        let x_res = LETTERS.iter().position(|&r| r == chars[0] as char);
+        let x = match x_res {
+            Some(i) => i as i8,
+            None => {
+                println!("First character must be file");
                 continue;
             }
-            if find_defended {
-                defended.push(square.clone());
+        };
+        let y_res = (chars[1] as char).to_string().parse::<i8>();
+        let y = match y_res {
+            Ok(j) => {
+                if j > 0 && j <= BOARD_WIDTH {
+                    j - 1
+                } else {
+                    {
+                        println!("Second character must be rank");
+                        continue;
+                    }
+                }
             }
-            if state != square_type {
-                moves.push(Move {
-                    enemy: piece.enemy,
-                    move_type: MoveType::Standard(pos.clone(), square),
-                });
+            Err(_) => {
+                println!("Second character must be int");
+                continue;
+            }
+        };
+        return Vect { x, y };
+    }
+}
+
+fn gen_move(choice: &str, from: Vect, to: Vect, subtract: bool, enemy: bool) -> Move {
+    let move_type = match choice {
+        "1" => MoveType::Standard(from, to, subtract),
+        "2" => MoveType::DoubleAdvance(from, to),
+        "3" => MoveType::EnPassant(from, to, Vect { x: from.y, y: to.x }),
+        "5" => {
+            let class = match input("Character of piece, defaults to queen: ").as_str() {
+                "b" => PieceClass::Bishop,
+                "n" => PieceClass::Knight,
+                "r" => PieceClass::Rook,
+                _ => PieceClass::Queen,
+            };
+            let piece = Piece { class, enemy };
+            MoveType::Promotion(from, to, piece, subtract)
+        }
+        _ => panic!("Couldn't match move type"),
+    };
+    Move { enemy, move_type }
+}
+
+fn get_move(label: &str, game_state: &GameState, enemy: bool) -> Move {
+    println!("\nSelect move type for {}: ", label);
+    println!("1: Standard");
+    println!("2: Double Advance");
+    println!("3: En Passant");
+    println!("4: Castling");
+    println!("5: Promotion");
+    println!("_: Null");
+    let choice = input("> ");
+    match choice.as_str() {
+        "4" => {
+            let queenside = input("Queenside or Kingside? q/k: ") == "q";
+            return Move {
+                move_type: MoveType::Castling(queenside),
+                enemy,
+            };
+        }
+        "1" | "2" | "3" | "5" => (),
+        _ => {
+            return Move {
+                move_type: MoveType::Null,
+                enemy,
             }
         }
-    }
+    };
 
-    (moves, defended)
+    let from = get_position("From: ");
+    let to = get_position("To: ");
+
+    let mut mov = gen_move(choice.as_str(), from, to, true, enemy);
+    let (_, subtract) = game_state.perform_move_subtract(&mov);
+    if !subtract {
+        mov = gen_move(choice.as_str(), from, to, false, enemy);
+    }
+    mov
+}
+
+pub fn input_move(label: &str, game_state: &GameState, enemy: bool) -> Move {
+    loop {
+        let mov = get_move(label, game_state, enemy);
+        game_state.perform_move(&mov).print();
+        if input("Are you sure? y/n: ") == "y" {
+            return mov;
+        }
+    }
 }

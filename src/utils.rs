@@ -1,3 +1,5 @@
+use std::io::{self, BufRead, BufReader, Write};
+
 use crate::{
     moves::Move,
     settings::{BOARD_WIDTH, ENGINE_BLACK},
@@ -87,4 +89,11 @@ pub fn get_better_buffer(left: &Vec<i16>, right: &Vec<i16>) -> BetterBuffer {
     } else {
         BetterBuffer::Equal
     }
+}
+
+pub fn input(prompt: &str) -> String {
+    print!("{}", prompt);
+    io::stdout().flush().expect("Couldn't flush buffer");
+    let result = BufReader::new(io::stdin()).lines().next().unwrap();
+    result.unwrap()
 }

@@ -5,24 +5,30 @@ pub const BOARD_WIDTH: i8 = 8;
 // True: Engine on ranks 7 and 8, kings on e file
 pub const ENGINE_BLACK: bool = false;
 
-// Use standard chess layout if false
-// Dev mode disables castling
-pub const DEV_MODE: bool = true;
+// Play a normal game
+pub const GAME_LOOP: bool = true;
+
+// All castling probabilities set to following
+pub const CASTLING: bool = true;
 
 pub const THREADING: bool = true;
 
-pub const DEPTH: i8 = 3;
+// Only affects development, not simulation
+// Between 0 and 1
+pub const RANDOM_FACTOR: f32 = 0.25;
 
-// Layout for dev mode
+// Standard layout, else one below
+pub const STANDARD_BOARD: bool = true;
+
 // King must be on right, layout loaded
 // flipped vertically only before loading
 // into board
 pub const LAYOUT: &str = r"
-. . . . K . . .
+. . . . . . K .
 . . . . . . . .
 . r . . . . . .
 . . . . . . . .
-r . . . . . . .
+. r . . . . . .
 . . . . . . . .
 . . . . . . . .
 . . . k . . . .

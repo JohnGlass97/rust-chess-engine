@@ -1,7 +1,7 @@
 use crate::{
     moves::{Move, MoveType},
     pieces::{Board, Piece, PieceClass},
-    settings::{BOARD_WIDTH, DEV_MODE, ENGINE_BLACK, LAYOUT},
+    settings::{BOARD_WIDTH, CASTLING, ENGINE_BLACK, LAYOUT, STANDARD_BOARD},
     utils::{CastlingPossibilities, Vect, LETTERS},
 };
 
@@ -14,29 +14,42 @@ pub struct GameState {
     pub en_passant_midpoint: Option<Vect>,
 }
 
-fn print_board(board: &Board) {
+fn print_board(board: &Board, direct: bool) {
     println!();
     for j in 0..BOARD_WIDTH {
-        let mut out = String::from(if ENGINE_BLACK { j + 1 } else { BOARD_WIDTH - j }.to_string());
+        let mut out = if direct {
+            String::new()
+        } else {
+            String::from(if ENGINE_BLACK { j + 1 } else { BOARD_WIDTH - j }.to_string())
+        };
         let row = board[(BOARD_WIDTH - 1 - j) as usize];
         for i in 0..BOARD_WIDTH {
-            let square = row[if ENGINE_BLACK { BOARD_WIDTH - 1 - i } else { i } as usize];
+            let square = row[if ENGINE_BLACK && !direct {
+                BOARD_WIDTH - 1 - i
+            } else {
+                i
+            } as usize];
             let char = match square {
                 Some(piece) => piece.repr(),
                 None => '.',
             };
-            out += &format!(" {}", char);
+            if !direct || i != 0 {
+                out += " ";
+            }
+            out += &format!("{}", char);
         }
         println!("{}", out);
     }
-    let mut out = String::from(" ");
-    for i in 0..BOARD_WIDTH {
-        out += &format!(
-            " {}",
-            LETTERS[if ENGINE_BLACK { BOARD_WIDTH - i - 1 } else { i } as usize]
-        );
+    if !direct {
+        let mut out = String::from(" ");
+        for i in 0..BOARD_WIDTH {
+            out += &format!(
+                " {}",
+                LETTERS[if ENGINE_BLACK { BOARD_WIDTH - i - 1 } else { i } as usize]
+            );
+        }
+        println!("{}", out);
     }
-    println!("{}", out);
     println!();
 }
 
@@ -46,13 +59,15 @@ fn standard_move(
     to: &Vect,
     new_piece: Option<Piece>,
     castling: &mut CastlingPossibilities,
-) -> (i16, bool) {
+) -> (i16, bool, bool) {
     let start_piece = board[from.y as usize][from.x as usize];
     let end_piece = board[to.y as usize][to.x as usize];
     board[from.y as usize][from.x as usize] = None;
 
     let mut king_killed = false;
     let mut score_delta = 0;
+
+    let mut subtract = true;
 
     // Disable castling if piece moved
     match &start_piece {
@@ -68,11 +83,14 @@ fn standard_move(
                     castling.kingside = false;
                 }
             }
+            PieceClass::Pawn => match &end_piece {
+                Some(_) => (),
+                None => subtract = false,
+            },
             _ => (),
         },
         None => {
-            print_board(board);
-            panic!("No piece found at {}, {}", from.x, from.y)
+            println!("NO PIECE AT {}, {}", from.x, from.y);
         }
     }
 
@@ -107,7 +125,7 @@ fn standard_move(
     };
     board[to.y as usize][to.x as usize] = replacement_piece;
 
-    (score_delta, king_killed)
+    (score_delta, king_killed, subtract)
 }
 
 impl GameState {
@@ -142,7 +160,47 @@ impl GameState {
         moves
     }
 
-    pub fn perform_move(&self, mov: &Move) -> GameState {
+    pub fn get_defended_matrix(&self) -> [[f32; BOARD_WIDTH as usize]; BOARD_WIDTH as usize] {
+        let mut defended: Vec<Vect> = Vec::new();
+        let enemy = false;
+
+        for x in 0..BOARD_WIDTH {
+            for y in 0..BOARD_WIDTH {
+                let square = self.board[y as usize][x as usize];
+                match square {
+                    Some(piece) => {
+                        if piece.enemy == enemy {
+                            // Ignore defended positions and pass castling possibilities for given player
+                            let (_, mut new_defended) = piece.all_moves(
+                                &self.board,
+                                Vect { x, y },
+                                true,
+                                &self.en_passant_midpoint,
+                                if enemy {
+                                    &self.opponent_castling
+                                } else {
+                                    &self.engine_castling
+                                },
+                            );
+                            defended.append(&mut new_defended);
+                        }
+                    }
+                    None => (),
+                }
+            }
+        }
+
+        let mut matrix = [[0.; BOARD_WIDTH as usize]; BOARD_WIDTH as usize];
+
+        for pos in defended {
+            matrix[pos.y as usize][pos.x as usize] += 1.;
+        }
+
+        matrix
+    }
+
+    pub fn perform_move_subtract(&self, mov: &Move) -> (GameState, bool) {
+        // Subtract false if move is a pawn not attacking
         let mut board = self.board.clone();
         let mut score = self.score;
         let mut kings_alive = self.kings_alive;
@@ -157,15 +215,18 @@ impl GameState {
             &mut engine_castling
         };
 
+        let subtract;
+
         match &mov.move_type {
-            MoveType::Standard(from, to) => {
-                let (score_delta, king_killed) =
+            MoveType::Standard(from, to, _) => {
+                let (score_delta, king_killed, sub) =
                     standard_move(&mut board, from, to, None, castling);
                 score += score_delta;
                 kings_alive = !king_killed && kings_alive;
+                subtract = sub;
             }
             MoveType::DoubleAdvance(from, to) => {
-                let (score_delta, king_killed) =
+                let (score_delta, king_killed, _) =
                     standard_move(&mut board, from, to, None, castling);
                 score += score_delta;
                 kings_alive = !king_killed && kings_alive;
@@ -175,18 +236,23 @@ impl GameState {
                     x: (from.x + to.x) / 2,
                     y: (from.y + to.y) / 2,
                 });
+
+                subtract = false;
             }
             MoveType::EnPassant(from, to, target) => {
                 // Simply move piece, score delta will always be 0 and kings won't be killed
                 standard_move(&mut board, from, to, None, castling);
                 score += 1;
                 board[target.y as usize][target.x as usize] = None;
+
+                subtract = true;
             }
-            MoveType::Promotion(from, to, piece) => {
-                let (score_delta, king_killed) =
+            MoveType::Promotion(from, to, piece, _) => {
+                let (score_delta, king_killed, sub) =
                     standard_move(&mut board, from, to, Some(*piece), castling);
                 score += score_delta;
                 kings_alive = !king_killed && kings_alive;
+                subtract = sub;
             }
             MoveType::Castling(queenside) => {
                 assert!(BOARD_WIDTH == 8, "Board with must be 8 for castling");
@@ -214,22 +280,38 @@ impl GameState {
                     engine_castling.kingside = false;
                     engine_castling.queenside = false;
                 }
+
+                subtract = false
             }
-            MoveType::Null => (),
+            MoveType::Null => {
+                subtract = true;
+            }
         }
 
-        Self {
-            board,
-            score,
-            kings_alive,
-            engine_castling,
-            opponent_castling,
-            en_passant_midpoint,
-        }
+        (
+            Self {
+                board,
+                score,
+                kings_alive,
+                engine_castling,
+                opponent_castling,
+                en_passant_midpoint,
+            },
+            subtract,
+        )
+    }
+
+    pub fn perform_move(&self, mov: &Move) -> GameState {
+        let (game_state, _) = self.perform_move_subtract(mov);
+        game_state
     }
 
     pub fn print(&self) {
-        print_board(&self.board);
+        print_board(&self.board, false);
+    }
+
+    pub fn print_direct(&self) {
+        print_board(&self.board, true);
     }
 }
 
@@ -248,7 +330,11 @@ pub fn parse_layout() -> GameState {
     let mut board: Board = [[None; BOARD_WIDTH as usize]; BOARD_WIDTH as usize];
     let mut score = 0;
 
-    let _layout_string = if DEV_MODE { LAYOUT } else { DEFAULT_LAYOUT };
+    let _layout_string = if STANDARD_BOARD {
+        DEFAULT_LAYOUT
+    } else {
+        LAYOUT
+    };
 
     let layout_string = _layout_string
         .strip_prefix("\n")
@@ -290,12 +376,12 @@ pub fn parse_layout() -> GameState {
         score,
         kings_alive: true,
         engine_castling: CastlingPossibilities {
-            queenside: !DEV_MODE,
-            kingside: !DEV_MODE,
+            queenside: CASTLING,
+            kingside: CASTLING,
         },
         opponent_castling: CastlingPossibilities {
-            queenside: !DEV_MODE,
-            kingside: !DEV_MODE,
+            queenside: CASTLING,
+            kingside: CASTLING,
         },
         en_passant_midpoint: None,
     }
