@@ -6,20 +6,40 @@ use crate::{
     pieces::PieceClass,
     settings::{BOARD_WIDTH, RANDOM_FACTOR},
     simulation::analyse,
+    utils::Vect,
 };
+
+fn get_move_type_data(mov: &Move) -> Option<(Vect, Vect, bool)> {
+    Some(match mov.move_type {
+        MoveType::Standard(from, to, subtract) => (from, to, subtract),
+        MoveType::DoubleAdvance(from, to) => (from, to, false),
+        MoveType::EnPassant(from, to, subtract) => (from, to, true),
+        MoveType::Castling(subtract) => return None,
+        MoveType::Promotion(from, to, _, subtract) => (from, to, subtract),
+        MoveType::Null => panic!("Engine provided move should not be null"),
+    })
+}
+
+fn get_pawn_score(game_state: &GameState, mov: &Move) -> f32 {
+    let from = match get_move_type_data(mov) {
+        Some((f, _, _)) => f,
+        None => return 0.,
+    };
+    let piece = game_state.board[from.y as usize][from.x as usize].unwrap();
+    match piece.class {
+        PieceClass::Pawn => 1.,
+        _ => 0.,
+    }
+}
 
 fn get_defended_score(
     defended_matrix: &[[f32; BOARD_WIDTH as usize]; BOARD_WIDTH as usize],
     mov: &Move,
 ) -> f32 {
     // Prefer moves to squares protected by multiple pieces
-    let (dest, subtract) = match mov.move_type {
-        MoveType::Standard(_, to, subtract) => (to, subtract),
-        MoveType::DoubleAdvance(_, to) => (to, false),
-        MoveType::EnPassant(_, to, _) => (to, true),
-        MoveType::Castling(_) => return 0.,
-        MoveType::Promotion(_, to, _, subtract) => (to, subtract),
-        MoveType::Null => panic!("Engine provided move should not be null"),
+    let (dest, subtract) = match get_move_type_data(mov) {
+        Some((_, to, sub)) => (to, sub),
+        None => return 0.,
     };
 
     let mut score = defended_matrix[dest.y as usize][dest.x as usize];
@@ -30,13 +50,9 @@ fn get_defended_score(
 }
 
 fn get_position_score(game_state: &GameState, mov: &Move) -> f32 {
-    let (from, to) = match mov.move_type {
-        MoveType::Standard(from, to, _) => (from, to),
-        MoveType::DoubleAdvance(from, to) => (from, to),
-        MoveType::EnPassant(from, to, _) => (from, to),
-        MoveType::Castling(_) => return 0.,
-        MoveType::Promotion(from, to, _, _) => (from, to),
-        MoveType::Null => panic!("Engine provided move should not be null"),
+    let (from, to) = match get_move_type_data(mov) {
+        Some((from, to, sub)) => (from, to),
+        None => return 0.,
     };
 
     let square = game_state.board[from.y as usize][from.x as usize];
@@ -92,10 +108,13 @@ pub fn find_best_development(game_state: &GameState, moves: Vec<Move>) -> Move {
         // Apply weightings to each component
         if game_state.score > 12 {
             let trap = get_opponent_trap_score(new_state);
-            dev += trap * 1. / 30.;
+            dev += trap * 1. / 60.;
 
             let double_move = get_double_move_score(new_state);
-            dev += double_move * 1. / 15.;
+            dev += double_move * 1. / 30.;
+
+            let pawn = get_pawn_score(game_state, &mov);
+            dev += pawn * 1. / 3.
         } else {
             let defended = get_defended_score(&defended_matrix, &mov);
             dev += f32::min(defended, 1.) * 1. / 3.;
