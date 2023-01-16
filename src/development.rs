@@ -22,7 +22,7 @@ fn get_move_type_data(mov: &Move) -> Option<(Vect, Vect, bool)> {
 
 fn get_pawn_score(game_state: &GameState, mov: &Move) -> f32 {
     if game_state.score > 20 {
-        return 0.
+        return 0.;
     }
     let from = match get_move_type_data(mov) {
         Some((f, _, _)) => f,
@@ -85,8 +85,9 @@ fn get_position_score(game_state: &GameState, mov: &Move) -> f32 {
 
 fn get_double_move_score(new_state: &GameState) -> f32 {
     let result = analyse(new_state, 1, false);
-    let score_delta = result.score_buffer[0] - new_state.score;
-    i16::max(0, i16::min(5, score_delta)) as f32
+    let score_delta = result.end_score - new_state.score;
+    i16::max(0, i16::min(5, score_delta)) as f32;
+    0.
 }
 
 fn get_opponent_trap_score(new_state: &GameState) -> f32 {

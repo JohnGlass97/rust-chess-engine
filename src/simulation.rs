@@ -3,8 +3,9 @@ use std::{thread, time::Instant};
 use crate::{
     gamestate::GameState,
     moves::Move,
+    pieces::{MAX_SCORE, SCORE_RANGE},
     settings::THREADING,
-    utils::{get_better_buffer, AnalysisResult, BetterBuffer},
+    utils::{AnalysisResult, BetterBuffer},
 };
 
 pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult {
@@ -13,7 +14,8 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
     if depth == 0 {
         return AnalysisResult {
             best_moves: None,
-            score_buffer: Vec::from([game_state.score]),
+            score_buffer: (game_state.score + MAX_SCORE) as u64,
+            end_score: game_state.score,
             opponent_in_check: false,
             engine_no_moves: false,
             sim_moves: 0,
@@ -31,7 +33,9 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
     let mut valid_moves: u32 = 0;
 
     let mut best_moves: Vec<Move> = Vec::new();
-    let mut best_score_buffer = Vec::from([i16::MIN]);
+    let mut best_score_buffer = 0;
+
+    let mut end_score = 0;
 
     for engine_move in engine_possible_moves {
         let mut self_check = false;
@@ -41,9 +45,13 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
         // If opponent king killable, immediately return
         if !game_state_1.kings_alive {
+            // Normalize score and mimic result produced at depth 0
+            let score_buffer =
+                (game_state_1.score + MAX_SCORE) as u64 * SCORE_RANGE.pow(depth as u32);
             return AnalysisResult {
                 best_moves: Some(Vec::from([engine_move])),
-                score_buffer: Vec::from([game_state_1.score]),
+                score_buffer,
+                end_score: game_state_1.score,
                 opponent_in_check: true,
                 engine_no_moves: false,
                 sim_moves,
@@ -76,7 +84,8 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
             }
         }
 
-        let mut worst_case_buffer = Vec::from([i16::MAX]);
+        let mut worst_case_buffer = u64::MAX;
+        let mut cor_end_score = 0;
         let mut found_valid_opponent_move = false;
 
         for handle in result_handles {
@@ -95,16 +104,14 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
             if analysis.engine_no_moves {
                 // Coule be checkmate or stalemate, reject both
-                worst_case_buffer = Vec::from([-1000]);
+                worst_case_buffer = 0;
                 break;
             }
 
-            match get_better_buffer(&worst_case_buffer, &analysis.score_buffer) {
-                BetterBuffer::Left => {
-                    worst_case_buffer = analysis.score_buffer;
-                }
-                _ => (),
-            };
+            if analysis.score_buffer < worst_case_buffer {
+                worst_case_buffer = analysis.score_buffer;
+                cor_end_score = analysis.end_score;
+            }
         }
 
         completed_outer += 1;
@@ -130,22 +137,23 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
             let analysis = analyse(&game_state_1, 1, false);
             sim_moves += analysis.sim_moves;
 
-            // If checkmate push with actual score, else -1000
+            // If checkmate push with actual score, else worst possible
             worst_case_buffer = if analysis.opponent_in_check {
                 analysis.score_buffer
             } else {
-                Vec::from([-1000])
+                0
             };
+            end_score = analysis.end_score;
         }
 
         // Prioritising recurisve score followed by immediate score
-        match get_better_buffer(&best_score_buffer, &worst_case_buffer) {
-            BetterBuffer::Left => continue,
-            BetterBuffer::Right => {
-                best_moves.clear();
-                best_score_buffer = worst_case_buffer;
-            }
-            BetterBuffer::Equal => (),
+        if worst_case_buffer < best_score_buffer {
+            continue;
+        }
+        if worst_case_buffer > best_score_buffer {
+            best_moves.clear();
+            best_score_buffer = worst_case_buffer;
+            end_score = cor_end_score;
         }
         if root {
             best_moves.push(engine_move);
@@ -156,11 +164,12 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
     assert!(!root || engine_no_moves || !best_moves.is_empty());
 
-    best_score_buffer.push(game_state.score);
+    best_score_buffer = best_score_buffer * SCORE_RANGE + (game_state.score + MAX_SCORE) as u64;
 
     AnalysisResult {
         best_moves: if root { Some(best_moves) } else { None },
         score_buffer: best_score_buffer,
+        end_score,
         opponent_in_check: false,
         engine_no_moves,
         sim_moves,

@@ -31,13 +31,13 @@ fn find_best_move(game_state: &GameState, recurision_depth: u8) -> Option<Move> 
         println!("{}", mov.repr());
     }
 
-    if analysis.score_buffer[0] > 250 {
+    if analysis.end_score > 250 {
         println!("Checkmate found!");
     } else if analysis.engine_no_moves {
         println!("No moves found, game over?");
         return None;
     } else {
-        println!("Best score: {}", analysis.score_buffer[0]);
+        println!("Best score: {}", analysis.end_score);
     }
 
     println!("Analysis found {} moves", moves.len());

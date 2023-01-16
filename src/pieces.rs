@@ -4,6 +4,10 @@ use crate::{
     utils::{CastlingPossibilities, SquareType, Vect},
 };
 
+// Max score attainable
+pub const SCORE_RANGE: u64 = 2000;
+pub const MAX_SCORE: i16 = 1000;
+
 const ROOK_VECTORS: [Vect; 4] = [
     Vect { x: 1, y: 0 },
     Vect { x: 0, y: 1 },
@@ -242,7 +246,6 @@ pub fn pawn_moves(
                 true,
             ));
         }
-            
     }
 
     // Double advance

@@ -2,6 +2,7 @@ use std::io::{self, BufRead, BufReader, Write};
 
 use crate::{
     moves::Move,
+    pieces::{MAX_SCORE, SCORE_RANGE},
     settings::{BOARD_WIDTH, ENGINE_BLACK},
 };
 
@@ -40,7 +41,8 @@ pub struct CastlingPossibilities {
 
 pub struct AnalysisResult {
     pub best_moves: Option<Vec<Move>>,
-    pub score_buffer: Vec<i16>,
+    pub score_buffer: u64,
+    pub end_score: i16,
     pub opponent_in_check: bool,
     pub engine_no_moves: bool,
     pub sim_moves: u32,
@@ -67,28 +69,6 @@ pub enum BetterBuffer {
     Left,
     Right,
     Equal,
-}
-
-pub fn get_better_buffer(left: &Vec<i16>, right: &Vec<i16>) -> BetterBuffer {
-    for (l, r) in left.iter().zip(right.iter()) {
-        if l > r {
-            return BetterBuffer::Left;
-        }
-        if l < r {
-            return BetterBuffer::Right;
-        }
-    }
-
-    // Shorter buffers are better
-    let left_len = left.len();
-    let right_len = right.len();
-    if left_len > right_len {
-        BetterBuffer::Right
-    } else if left_len < right_len {
-        BetterBuffer::Left
-    } else {
-        BetterBuffer::Equal
-    }
 }
 
 pub fn input(prompt: &str) -> String {
