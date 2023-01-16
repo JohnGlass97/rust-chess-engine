@@ -26,19 +26,21 @@ fn find_best_move(game_state: &GameState, recurision_depth: u8) -> Option<Move> 
 
     let moves = analysis.best_moves.unwrap();
 
-    for mov in moves.iter() {
+    /*for mov in moves.iter() {
         assert!(!mov.enemy);
         println!("{}", mov.repr());
-    }
+    }*/
 
     if analysis.end_score > 250 {
         println!("Checkmate found!");
     } else if analysis.engine_no_moves {
         println!("No moves found, game over?");
         return None;
-    } else {
-        println!("Best score: {}", analysis.end_score);
     }
+    println!(
+        "Best score delta: {}",
+        analysis.end_score - game_state.score
+    );
 
     println!("Analysis found {} moves", moves.len());
 
@@ -102,8 +104,8 @@ fn main() {
             None => input_move("engine", &game_state, false),
         };
         game_state = game_state.perform_move(&engine_move);
-        for mov in game_state.get_possible_moves(true) {
+        /*for mov in game_state.get_possible_moves(true) {
             println!("{}", mov.repr());
-        }
+        }*/
     }
 }

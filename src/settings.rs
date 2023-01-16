@@ -15,7 +15,7 @@ pub const THREADING: bool = true;
 
 // Only affects development, not simulation
 // Between 0 and 1
-pub const RANDOM_FACTOR: f32 = 0.25;
+pub const RANDOM_FACTOR: f32 = 0.35;
 
 // Standard layout, else one below
 pub const STANDARD_BOARD: bool = true;

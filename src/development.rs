@@ -61,7 +61,7 @@ fn get_position_score(game_state: &GameState, mov: &Move) -> f32 {
     let square = game_state.board[from.y as usize][from.x as usize];
     match square {
         Some(piece) => match piece.class {
-            PieceClass::King => return if to.y == 0 { 1. } else { 0. },
+            PieceClass::King => return if from.y != 0 && to.y == 0 { 1. } else { 0. },
             _ => (),
         },
         None => (),
@@ -117,8 +117,12 @@ pub fn find_best_development(game_state: &GameState, moves: Vec<Move>) -> Move {
             let double_move = get_double_move_score(new_state);
             dev += double_move * 1. / 30.;
 
-            let pawn = get_pawn_score(game_state, &mov);
-            dev += pawn * 1. / 3.
+            if game_state.score < 25 {
+                let pawn = get_pawn_score(game_state, &mov);
+                dev += pawn * 1. / 3.;
+            } else {
+                dev *= 3. / 2.;
+            }
         } else {
             let defended = get_defended_score(&defended_matrix, &mov);
             dev += f32::min(defended, 1.) * 1. / 3.;
@@ -138,7 +142,7 @@ pub fn find_best_development(game_state: &GameState, moves: Vec<Move>) -> Move {
         }
     }
 
-    println!("Best dev: {}", best_dev);
+    println!("Best development score (0..1): {}", best_dev);
 
     best_move
 }

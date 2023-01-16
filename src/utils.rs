@@ -2,7 +2,7 @@ use std::io::{self, BufRead, BufReader, Write};
 
 use crate::{
     moves::Move,
-    pieces::{MAX_SCORE, SCORE_RANGE},
+    pieces::{SCORE_BOUND, SCORE_RANGE},
     settings::{BOARD_WIDTH, ENGINE_BLACK},
 };
 
@@ -39,16 +39,6 @@ pub struct CastlingPossibilities {
     pub kingside: bool,
 }
 
-pub struct AnalysisResult {
-    pub best_moves: Option<Vec<Move>>,
-    pub score_buffer: u64,
-    pub end_score: i16,
-    pub opponent_in_check: bool,
-    pub engine_no_moves: bool,
-    pub sim_moves: u32,
-    pub valid_moves: u32,
-}
-
 pub fn pos_notation(pos: &Vect) -> String {
     let (x, mut y) = (pos.x, pos.y);
     if ENGINE_BLACK {
@@ -63,12 +53,6 @@ pub fn pos_notation(pos: &Vect) -> String {
     };
     y += 1;
     format!("{letter}{y}")
-}
-
-pub enum BetterBuffer {
-    Left,
-    Right,
-    Equal,
 }
 
 pub fn input(prompt: &str) -> String {

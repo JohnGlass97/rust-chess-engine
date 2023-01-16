@@ -3,10 +3,19 @@ use std::{thread, time::Instant};
 use crate::{
     gamestate::GameState,
     moves::Move,
-    pieces::{MAX_SCORE, SCORE_RANGE},
+    pieces::{SCORE_BOUND, SCORE_RANGE},
     settings::THREADING,
-    utils::{AnalysisResult, BetterBuffer},
 };
+
+pub struct AnalysisResult {
+    pub best_moves: Option<Vec<Move>>,
+    pub score_buffer: u64,
+    pub end_score: i16,
+    pub opponent_in_check: bool,
+    pub engine_no_moves: bool,
+    pub sim_moves: u32,
+    pub valid_moves: u32,
+}
 
 pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult {
     assert!(game_state.kings_alive);
@@ -14,7 +23,7 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
     if depth == 0 {
         return AnalysisResult {
             best_moves: None,
-            score_buffer: (game_state.score + MAX_SCORE) as u64,
+            score_buffer: game_state.get_normalized(),
             end_score: game_state.score,
             opponent_in_check: false,
             engine_no_moves: false,
@@ -45,12 +54,11 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
         // If opponent king killable, immediately return
         if !game_state_1.kings_alive {
-            // Normalize score and mimic result produced at depth 0
-            let score_buffer =
-                (game_state_1.score + MAX_SCORE) as u64 * SCORE_RANGE.pow(depth as u32);
+            assert!(!root, "Enemy king is in check");
+
             return AnalysisResult {
-                best_moves: Some(Vec::from([engine_move])),
-                score_buffer,
+                best_moves: None,
+                score_buffer: game_state_1.get_normalized(),
                 end_score: game_state_1.score,
                 opponent_in_check: true,
                 engine_no_moves: false,
@@ -139,11 +147,12 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
             // If checkmate push with actual score, else worst possible
             worst_case_buffer = if analysis.opponent_in_check {
-                analysis.score_buffer
+                // Fill buffer with score to represent depth it is acheived at
+                SCORE_RANGE.pow(depth as u32) - 1
             } else {
                 0
             };
-            end_score = analysis.end_score;
+            cor_end_score = analysis.end_score;
         }
 
         // Prioritising recurisve score followed by immediate score
@@ -164,7 +173,7 @@ pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult 
 
     assert!(!root || engine_no_moves || !best_moves.is_empty());
 
-    best_score_buffer = best_score_buffer * SCORE_RANGE + (game_state.score + MAX_SCORE) as u64;
+    best_score_buffer = best_score_buffer * SCORE_RANGE + game_state.get_normalized();
 
     AnalysisResult {
         best_moves: if root { Some(best_moves) } else { None },

@@ -1,6 +1,6 @@
 use crate::{
     moves::{Move, MoveType},
-    pieces::{Board, Piece, PieceClass},
+    pieces::{Board, Piece, PieceClass, SCORE_BOUND, SCORE_RANGE},
     settings::{BOARD_WIDTH, CASTLING, ENGINE_BLACK, LAYOUT, STANDARD_BOARD},
     utils::{CastlingPossibilities, Vect, LETTERS},
 };
@@ -129,6 +129,12 @@ fn standard_move(
 }
 
 impl GameState {
+    pub fn get_normalized(&self) -> u64 {
+        let unclamped = self.score + SCORE_BOUND;
+        let clamped = u64::min(i16::max(0, unclamped) as u64, SCORE_RANGE - 1);
+        clamped
+    }
+
     pub fn get_possible_moves(&self, enemy: bool) -> Vec<Move> {
         let mut moves = Vec::new();
 

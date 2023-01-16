@@ -4,9 +4,8 @@ use crate::{
     utils::{CastlingPossibilities, SquareType, Vect},
 };
 
-// Max score attainable
-pub const SCORE_RANGE: u64 = 2000;
-pub const MAX_SCORE: i16 = 1000;
+pub const SCORE_BOUND: i16 = 500;
+pub const SCORE_RANGE: u64 = 2 * SCORE_BOUND as u64;
 
 const ROOK_VECTORS: [Vect; 4] = [
     Vect { x: 1, y: 0 },
