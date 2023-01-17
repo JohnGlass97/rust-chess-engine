@@ -1,10 +1,6 @@
 use std::io::{self, BufRead, BufReader, Write};
 
-use crate::{
-    moves::Move,
-    pieces::{SCORE_BOUND, SCORE_RANGE},
-    settings::{BOARD_WIDTH, ENGINE_BLACK},
-};
+use crate::settings::{BOARD_WIDTH, ENGINE_BLACK};
 
 pub const LETTERS: [char; 8] = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 

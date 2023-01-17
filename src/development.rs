@@ -13,8 +13,8 @@ fn get_move_type_data(mov: &Move) -> Option<(Vect, Vect, bool)> {
     Some(match mov.move_type {
         MoveType::Standard(from, to, subtract) => (from, to, subtract),
         MoveType::DoubleAdvance(from, to) => (from, to, false),
-        MoveType::EnPassant(from, to, subtract) => (from, to, true),
-        MoveType::Castling(subtract) => return None,
+        MoveType::EnPassant(from, to, _) => (from, to, true),
+        MoveType::Castling(_) => return None,
         MoveType::Promotion(from, to, _, subtract) => (from, to, subtract),
         MoveType::Null => panic!("Engine provided move should not be null"),
     })
@@ -54,7 +54,7 @@ fn get_defended_score(
 
 fn get_position_score(game_state: &GameState, mov: &Move) -> f32 {
     let (from, to) = match get_move_type_data(mov) {
-        Some((from, to, sub)) => (from, to),
+        Some((from, to, _)) => (from, to),
         None => return 0.,
     };
 
