@@ -13,8 +13,6 @@ pub const CASTLING: bool = true;
 
 pub const THREADING: bool = true;
 
-pub const PRUNING: bool = false;
-
 // Only affects development, not simulation
 // Between 0 and 1
 pub const RANDOM_FACTOR: f32 = 0.35;
@@ -24,7 +22,7 @@ pub const STANDARD_BOARD: bool = true;
 
 // King must be on right, layout loaded
 // flipped vertically only before loading
-// into memory
+// into board
 pub const LAYOUT: &str = r"
 . . . . . . K .
 . . . . . . . .

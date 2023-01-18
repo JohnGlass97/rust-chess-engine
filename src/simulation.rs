@@ -3,8 +3,8 @@ use std::{thread, time::Instant};
 use crate::{
     gamestate::GameState,
     moves::Move,
-    pieces::SCORE_RANGE,
-    settings::{PRUNING, THREADING},
+    pieces::{SCORE_BOUND, SCORE_RANGE},
+    settings::THREADING,
 };
 
 pub struct AnalysisResult {
@@ -18,20 +18,7 @@ pub struct AnalysisResult {
 }
 
 pub fn analyse(game_state: &GameState, depth: u8, root: bool) -> AnalysisResult {
-    analyse_pruned(game_state, depth, root, 0, u64::MAX)
-}
-
-fn analyse_pruned(
-    game_state: &GameState,
-    depth: u8,
-    root: bool,
-    mut alpha: u64,
-    beta: u64,
-) -> AnalysisResult {
-    // Alpha inclusive, beta is not
-
     assert!(game_state.kings_alive);
-    //assert!(alpha_buffer < beta_buffer);
 
     if depth == 0 {
         return AnalysisResult {
@@ -83,12 +70,7 @@ fn analyse_pruned(
         let opponent_possible_moves = game_state_1.get_possible_moves(true);
 
         let mut result_handles: Vec<thread::JoinHandle<AnalysisResult>> = Vec::new();
-
-        let mut worst_case_buffer = u64::MAX;
-        let mut cor_end_score = 0;
-        let mut found_valid_opponent_move = false;
-
-        let mut beta_inner = beta;
+        let mut results: Vec<AnalysisResult> = Vec::new();
 
         // Recursively analyse resulting gamestates for all moves
         for opponent_move in opponent_possible_moves {
@@ -100,46 +82,25 @@ fn analyse_pruned(
                 break;
             }
 
+            let func = move || -> AnalysisResult { analyse(&game_state_2, depth - 1, false) };
+
             if THREADING && root {
-                let handle = thread::spawn(move || -> AnalysisResult {
-                    analyse_pruned(&game_state_2, depth - 1, false, alpha, beta)
-                });
+                let handle = thread::spawn(func);
                 result_handles.push(handle);
             } else {
-                let analysis = analyse_pruned(&game_state_2, depth - 1, false, alpha, beta);
-                sim_moves += analysis.sim_moves;
-
-                // Direct results are handled inline, threaded are handled in another loop
-                if analysis.opponent_in_check {
-                    // Opponent can't put self in check
-                    continue;
-                }
-
-                found_valid_opponent_move = true;
-
-                if analysis.engine_no_moves {
-                    // Coule be checkmate or stalemate, reject both
-                    worst_case_buffer = 0;
-                    break;
-                }
-
-                if analysis.score_buffer < worst_case_buffer {
-                    worst_case_buffer = analysis.score_buffer;
-                    cor_end_score = analysis.end_score;
-
-                    beta_inner = u64::min(beta_inner, worst_case_buffer);
-                }
-
-                if PRUNING && beta_inner <= alpha {
-                    break;
-                }
+                results.push(func());
             }
         }
 
-        // This code is fairly similar to the above results handling, but
-        // trying to use closures to avoid DRY heavily impacted performance
+        let mut worst_case_buffer = u64::MAX;
+        let mut cor_end_score = 0;
+        let mut found_valid_opponent_move = false;
+
         for handle in result_handles {
-            let analysis = handle.join().unwrap();
+            results.push(handle.join().unwrap());
+        }
+
+        for analysis in results {
             sim_moves += analysis.sim_moves;
 
             if analysis.opponent_in_check {
@@ -158,12 +119,7 @@ fn analyse_pruned(
             if analysis.score_buffer < worst_case_buffer {
                 worst_case_buffer = analysis.score_buffer;
                 cor_end_score = analysis.end_score;
-
-                beta_inner = u64::min(beta_inner, worst_case_buffer);
             }
-
-            // No pruning, wouldn't save time as recursion has
-            // already taken place, would only mess with sim_moves
         }
 
         completed_outer += 1;
@@ -198,9 +154,6 @@ fn analyse_pruned(
             };
             cor_end_score = analysis.end_score;
         }
-        /*if root {
-            println!("{} {}", engine_move.repr(), worst_case_buffer);
-        }*/
 
         // Prioritising recurisve score followed by immediate score
         if worst_case_buffer < best_score_buffer {
@@ -210,15 +163,9 @@ fn analyse_pruned(
             best_moves.clear();
             best_score_buffer = worst_case_buffer;
             end_score = cor_end_score;
-
-            alpha = u64::max(alpha, worst_case_buffer);
         }
         if root {
             best_moves.push(engine_move);
-        }
-
-        if PRUNING && beta <= alpha {
-            break;
         }
     }
 
