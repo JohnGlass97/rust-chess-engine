@@ -1,7 +1,7 @@
 use crate::{
     gamestate::GameState,
     pieces::{Board, Piece, PieceClass},
-    settings::BOARD_WIDTH,
+    settings::{BOARD_WIDTH, ENGINE_BLACK},
     utils::{input, pos_notation, SquareType, Vect, LETTERS},
 };
 
@@ -85,7 +85,11 @@ fn get_position(prompt: &str) -> Vect {
         let y = match y_res {
             Ok(j) => {
                 if j > 0 && j <= BOARD_WIDTH {
-                    j - 1
+                    if ENGINE_BLACK {
+                        BOARD_WIDTH - j as i8
+                    } else {
+                        j - 1 as i8
+                    }
                 } else {
                     {
                         println!("Second character must be rank");
