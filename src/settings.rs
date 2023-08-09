@@ -8,7 +8,7 @@ pub const ENGINE_BLACK: bool = false;
 // Play a normal game
 pub const GAME_LOOP: bool = true;
 
-// All castling probabilities set to following
+// All castling possibilities set to following
 pub const CASTLING: bool = true;
 
 pub const THREADING: bool = true;
