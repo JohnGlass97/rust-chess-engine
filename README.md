@@ -1,16 +1,18 @@
 # rust-chess-engine
 
-A terminal based chess engine using the Minmax algorithm and multithreading.
+A terminal based chess engine using the minimax algorithm and multithreading.
 No opening databases have been utilised.
 
 ## Usage
 
 Clone the project:
+
 ```
 $ git clone https://github.com/JohnGlass97/rust-chess-engine.git
 ```
 
 Install Rust and run the following:
+
 ```
 $ cargo run --release
 ```
@@ -25,3 +27,4 @@ This was done in about a week, so there are further improvments that could be ma
   a library like `rayon` should be used instead of explicit thread spawning).
 - Better heuristic measures for development of pieces.
 - Use proper algebraic notation for inputting and outputting moves.
+- Adding tests
